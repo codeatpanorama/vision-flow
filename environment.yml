@@ -1,0 +1,17 @@
+name: vision-flow
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - opencv
+  - numpy
+  - pandas
+  - pillow
+  - poppler  # Required for pdf2image
+  - pip:
+    - google-cloud-vision==3.7.1
+    - openai==1.12.0
+    - python-dotenv==1.0.1
+    - pdf2image==1.16.3 
