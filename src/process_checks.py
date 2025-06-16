@@ -65,8 +65,8 @@ class CheckProcessor:
         check_images = []
         for i in range(0, len(images), 2):
             # testing logic for a single image
-            if i > 3:
-                break
+            # if i > 3:
+            #     break
             if i + 1 < len(images):
                 # Analyze both images to determine which is front/back
                 first_image = images[i]
@@ -151,73 +151,71 @@ class CheckProcessor:
         return response.text_annotations[0].description if response.text_annotations else ""
 
     def parse_check_details(self, front_text, back_text=None):
-        """Parse check details using ChatGPT and return a validated CheckDetails object"""
-        # Combine front and back text for raw_text field
-        combined_text = front_text + ("\n" + back_text if back_text else "")
-        
+        """Parse check details using ChatGPT and return a validated CheckDetails object"""        
         # Clean up the text for the prompt
         front_text_cleaned = front_text.replace('\n', ' ').replace('"', '\\"')
         back_text_cleaned = back_text.replace('\n', ' ').replace('"', '\\"') if back_text else ""
-        
+
+        # Combine front and back text for raw_text field
+        combined_text = front_text + ("\n" + back_text if back_text else "")
+   
         prompt = (
-            "Extract the following details from the given text blob. Pay special attention to the MICR line format and date extraction.\n"
-            "CRITICAL: Return ONLY the raw JSON object. DO NOT include any markdown formatting, code blocks, or explanation text.\n\n"
-            "Text:\n"
+            "Extract the following fields from the provided check text. For each field, follow the specific extraction rules and return the result in a JSON object with these exact keys:\n\n"
+            '{"payee_name": "", "amount": "", "date": "", "check_number": "", "check_transit_number": "", "check_institution_number": "", "check_bank_account_number": "", "bank": "", "company_name_address": ""}'
+            "\n\n"
+            "Check Text:\n"
             f"{front_text_cleaned}\n"
             f"{back_text_cleaned}\n"
-            "Required details:\n"
-            "- **Date Extraction (High Priority):**\n"
-            "    1. First, look for date format indicators like:\n"
-            "       - YYYYMMDD\n"
-            "       - DDMMYYYY\n"
-            "       - MMDDYYYY\n"
-            "       - YYYY MM DD\n"
-            "       - DD MM YYYY\n"
-            "       These are usually printed on the check to indicate the expected date format.\n\n"
-            "    2. Once you find the format indicator, use it to correctly interpret the actual date.\n"
-            "       Example: If format is YYYYMMDD and date shows 2024-10-31, parse as October 31, 2024\n\n"
-            "    3. Common locations for date format indicators:\n"
-            "       - Near 'DATE' text\n"
-            "       - Above or below the date field\n"
-            "       - In small print near date area\n\n"
-            "    4. Always convert the final date to DD/MM/YYYY format in the output\n\n"
-            "- **MICR Line Parsing (Most Important):**\n"
-            "    The MICR line at the bottom of the check follows this exact format:\n"
-            "    ⑈[check_number]⑈ ⑆[transit_number]⑉[institution_number]⑆ [account_number]⑈\n"
-            "    Example: ⑈004921⑈ ⑆06222⑉003⑆ 102⑉813⑉3⑈\n"
-            "    - Check Number: Between first pair of ⑈ symbols (004921)\n"
-            "    - Transit Number: Between ⑆ and ⑉ symbols (06222)\n"
-            "    - Institution Number: Between ⑉ and ⑆ symbols (003)\n"
-            "    - Account Number: Numbers after last ⑆, may contain ⑉ symbols (102-813-3)\n\n"
-            "- **Payee Name:**\n"
-            "    - Look for the actual service provider or individual name that follows 'PAY to the order of'\n"
-            "    - The payee is often a service name or individual name, NOT the company details that follow\n"
-            "    - Example: In 'PAY to the order of JOHN DOE SERVICES 123 COMPANY ST...', the payee is 'JOHN DOE SERVICES'\n"
-            "- **Company Name and Address:**\n"
-            "    - This is typically the detailed business information that follows the payee name\n"
-            "    - Should include full address and contact information if available\n"
-            "    - Example: '123 COMPANY ST, CITY, STATE 12345 Tel: 123-456-7890'\n"
-            "- Amount:\n" 
-            "    - Look for the amount of the check, include decimal places if present\n"
-            "    - Example: '$1,145.29'\n"
-            "- Bank:\n"
-            "    - Include the complete bank name and branch information\n\n"
-            "Special Instructions:\n"
-            "1. MICR Line is the highest priority - ensure exact parsing of check number, transit number, institution number, and account number\n"
-            "2. For dates: First find format indicator, then parse date accordingly\n"
-            "3. For payee name: Look specifically after 'PAY to the order of' and before any address/company details\n"
-            "4. For company details: Capture all business information including address and contact details\n"
-            "5. For bank: Include complete bank name with branch details\n"
-            "6. If a field is missing, return \"Not Found\" instead of guessing\n"
-            "7. IMPORTANT: Do not include any line breaks in the field values. Replace them with spaces.\n\n"
-            "\nReturn Format Instructions:\n"
-            "1. Return ONLY the JSON object itself\n"
-            "2. DO NOT wrap the response in ```json or ``` or any other formatting\n"
-            "3. DO NOT include any explanation before or after the JSON\n"
-            "4. The response should start with { and end with } with no other characters\n"
-            "5. Use this exact format:\n"
-            '{"payee_name": "", "amount": "", "date": "", "check_number": "", "check_transit_number": "", '
-            '"check_institution_number": "", "check_bank_account_number": "", "bank": "", "company_name_address": ""}'
+            "\n\nExtraction Rules:\n"
+            "1. payee_name\n"
+            "   - The payee is the person or business being paid.\n"
+            "   - Look for the line(s) immediately following 'PAY TO THE ORDER OF' or 'PAY to the order of'.\n"
+            "   - If there are multiple lines (e.g., a numbered company and a service name), the payee is the last name or business before the address or amount.\n"
+            "   - If you see a numbered company (like '1894837 ONTARIO INC') followed by a service name (like 'ERIKA DIAZ SERVICE'), the service name is the payee.\n"
+            "   - Ignore lines that look like addresses, phone numbers, or company registration numbers.\n"
+            "   - Example:\n"
+            "     PAY to the order of\n"
+            "     1894837 ONTARIO INC\n"
+            "     523 GARDENVIEW SQUARE\n"
+            "     PICKERING ONTARIO L1V4R7\n"
+            "     T: 647 298 4145\n"
+            "     ERIKA DIAZ SERVICE\n"
+            "     payee_name: ERIKA DIAZ SERVICE\n"
+            "2. amount\n"
+            "   - Extract the amount in dollars and cents, e.g., '$1,234.56'.\n"
+            "   - Prefer the numeric value if both words and numbers are present.\n"
+            "   - Ignore any non-amount numbers.\n"
+            "   - Example: '$550.00'\n"
+            "3. date\n"
+            "   - Extract the date in DD/MM/YYYY format.\n"
+            "   - If a date format indicator is present (e.g., YYYYMMDD, MMDDYYYY), use it to interpret the date.\n"
+            "   - Example: '31/10/2024'\n"
+            "4. check_number\n"
+            "   - Extract from the MICR line, between the first pair of ⑈ symbols.\n"
+            "   - Example: '004921'\n"
+            "5. check_transit_number\n"
+            "   - Extract from the MICR line, between ⑆ and ⑉ symbols.\n"
+            "   - Example: '06222'\n"
+            "6. check_institution_number\n"
+            "   - Extract from the MICR line, between ⑉ and ⑆ symbols.\n"
+            "   - Example: '003'\n"
+            "7. check_bank_account_number\n"
+            "   - Extract from the MICR line, after the last ⑆, may contain ⑉ symbols (e.g., '102-813-3').\n"
+            "   - Example: '102-813-3'\n"
+            "8. bank\n"
+            "   - Extract the complete bank name and branch information.\n"
+            "   - Example: 'RBC ROYAL BANK 972 BLOOR STREET WEST TORONTO, ONTARIO M6H 1L6'\n"
+            "9. company_name_address\n"
+            "   - Extract the full company name, address, and contact information if available.\n"
+            "   - This is typically the detailed business information that follows the payee name.\n"
+            "   - Example: '523 GARDENVIEW SQUARE PICKERING ONTARIO L1V4R7 T: 647 298 4145'\n"
+            "\nSpecial Instructions:\n"
+            "- If a field is missing, return 'Not Found'.\n"
+            "- Do not include any line breaks in the field values; replace them with spaces.\n"
+            "- Return ONLY the JSON object, with no extra formatting or explanation.\n"
+            "\nReturn Format:\n"
+            "Return only the JSON object, e.g.:\n"
+            '{"payee_name": "ERIKA DIAZ SERVICE", "amount": "$550.00", "date": "31/10/2024", "check_number": "004921", "check_transit_number": "06222", "check_institution_number": "003", "check_bank_account_number": "102-813-3", "bank": "RBC ROYAL BANK 972 BLOOR STREET WEST TORONTO, ONTARIO M6H 1L6", "company_name_address": "523 GARDENVIEW SQUARE PICKERING ONTARIO L1V4R7 T: 647 298 4145"}'
         )
 
         response = self.openai_client.chat.completions.create(
