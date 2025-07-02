@@ -2,6 +2,8 @@
 .env
 .env.*
 
+repository/*
+
 # Credentials
 credentials/
 *.json
@@ -45,3 +47,4 @@ test_data/
 .Trashes
 ehthumbs.db
 Thumbs.db
+env.example

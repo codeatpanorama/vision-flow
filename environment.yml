@@ -15,3 +15,4 @@ dependencies:
     - openai==1.12.0
     - python-dotenv==1.0.1
     - pdf2image==1.16.3 
+    - pymongo==4.0.0
