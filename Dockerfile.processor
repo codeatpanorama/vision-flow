@@ -1,0 +1,5 @@
+# Use the base image
+FROM vision-flow-base:latest
+
+# Run the check processor
+CMD ["python", "src/check_processor.py"] 

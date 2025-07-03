@@ -12,6 +12,7 @@ from pathlib import Path
 from utils.logger import setup_logger
 from utils.google_auth import setup_google_vision_auth
 from utils.image_analyzer import analyze_check_image
+from utils.path_utils import extract_document_id_from_path
 from models.check import CheckDetails
 
 # Load environment variables
@@ -34,9 +35,49 @@ class CheckProcessor:
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
-        self.openai_client = OpenAI(api_key=api_key)
         
-        self.checks_dir = Path("data/checks")
+        # Initialize OpenAI client
+        try:
+            self.openai_client = OpenAI(api_key=api_key)
+            logger.info("OpenAI client initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize OpenAI client: {str(e)}")
+            raise
+        
+        # Initialize MongoDB connection
+        try:
+            from pymongo import MongoClient
+            mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
+            db_name = os.getenv('MONGO_DB_NAME', 'pan-ocr')
+            
+            # Handle authentication if credentials are provided
+            mongo_username = os.getenv('MONGO_USERNAME')
+            mongo_password = os.getenv('MONGO_PASSWORD')
+            mongo_password_file = os.getenv('MONGO_PASSWORD_FILE')
+            if mongo_password_file and os.path.exists(mongo_password_file):
+                with open(mongo_password_file, 'r') as f:
+                    mongo_password = f.read().strip()
+            
+            if mongo_username and mongo_password:
+                # Create authenticated connection string
+                from urllib.parse import quote_plus
+                auth_uri = mongo_uri.replace('mongodb://', f'mongodb://{quote_plus(mongo_username)}:{quote_plus(mongo_password)}@')+db_name
+                self.client = MongoClient(auth_uri)
+            else:
+                self.client = MongoClient(mongo_uri)
+                
+            self.db = self.client[db_name]
+            self.check_collection = self.db['check']
+
+            # Test connection
+            self.client.admin.command('ping')
+            logger.info(f"Successfully connected to MongoDB at {mongo_uri}")
+            logger.info("Successfully initialized MongoDB connection")
+        except Exception as e:
+            logger.error(f"Failed to initialize MongoDB connection: {str(e)}")
+            raise
+        
+        self.checks_dir = Path("repository/processed_checks")
         self.csv_file = Path("data/processed_checks.csv")
         
         # Create directories if they don't exist
@@ -46,6 +87,14 @@ class CheckProcessor:
         if not self.csv_file.exists():
             self._initialize_csv()
             logger.info("Initialized new CSV file for check processing")
+
+    def create_check(self, check_details: CheckDetails):
+        """Create check in mongo db"""
+        try:
+            self.check_collection.insert_one(check_details.model_dump())
+        except Exception as e:
+            logger.error(f"Error creating check in mongo db: {str(e)}")
+            raise
 
     def _initialize_csv(self):
         """Initialize CSV file with headers"""
@@ -64,10 +113,10 @@ class CheckProcessor:
         # Process images in pairs
         check_images = []
         for i in range(0, len(images), 2):
-            # testing logic for a single image
-            # if i > 3:
-            #     break
             if i + 1 < len(images):
+                # testing logic for a single image
+                if i > 3:
+                    break
                 # Analyze both images to determine which is front/back
                 first_image = images[i]
                 second_image = images[i + 1]
@@ -130,13 +179,13 @@ class CheckProcessor:
         check_dir.mkdir(exist_ok=True)
         
         # Save front image
-        front_path = check_dir / "check_front.png"
+        front_path = check_dir / "front.png"
         cv2.imwrite(str(front_path), front_image)
         
         # Save back image if available
         back_path = None
         if back_image is not None:
-            back_path = check_dir / "check_back.png"
+            back_path = check_dir / "back.png"
             cv2.imwrite(str(back_path), back_image)
         
         return front_path, back_path
@@ -263,6 +312,7 @@ class CheckProcessor:
     def process_pdf(self, pdf_path):
         """Main function to process PDF containing checks"""
         try:
+            document_id = extract_document_id_from_path(pdf_path)
             # Extract images from PDF
             check_images = self.extract_images_from_pdf(pdf_path)
             logger.info(f"Found {len(check_images)} checks in PDF")
@@ -283,6 +333,14 @@ class CheckProcessor:
                 # Parse check details using cached text
                 check_details = self.parse_check_details(check_pair['front_text'], check_pair['back_text'])
                 logger.info("Check details parsed successfully")
+                check_details.id = check_id
+                check_details.documentId = document_id
+                # Convert PosixPath objects to strings for MongoDB storage
+                check_details.front_path = str(front_path) if front_path else None
+                check_details.back_path = str(back_path) if back_path else None
+
+                # create check in mongo
+                self.create_check(check_details)
 
                 # Add to CSV
                 self.add_to_csv(check_id, check_details)
@@ -292,7 +350,9 @@ class CheckProcessor:
             return True
 
         except Exception as e:
+            import traceback
             logger.error(f"Error processing PDF: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return False
 
 def main():

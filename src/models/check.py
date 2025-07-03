@@ -1,7 +1,12 @@
 from pydantic import BaseModel, Field
 from typing import Optional
+from datetime import datetime
 
 class CheckDetails(BaseModel):
+    # Making id and documentId optional so that CheckDetails can be instantiated
+    # before these values are known. They will be populated later in the flow.
+    id: Optional[str] = Field(None, description="Check ID")
+    documentId: Optional[str] = Field(None, description="Document ID")
     payee_name: str = Field(..., description="Name of the service provider or individual receiving the check")
     amount: str = Field(..., description="Check amount in currency format (e.g., $1,145.29)")
     date: str = Field(..., description="Check date in DD/MM/YYYY format")
@@ -12,3 +17,7 @@ class CheckDetails(BaseModel):
     bank: str = Field(..., description="Complete bank name including branch information")
     company_name_address: Optional[str] = Field(None, description="Company name, address and contact information if available")
     raw_text: str = Field(..., description="Raw text from the check")
+    createdAt: Optional[datetime] = Field(default_factory=lambda: datetime.now(), description="Creation date")
+    updatedAt: Optional[datetime] = Field(default_factory=lambda: datetime.now(), description="Last update date")
+    front_path: Optional[str] = Field(None, description="Path to the check front image")
+    back_path: Optional[str] = Field(None, description="Path to the check back image")
