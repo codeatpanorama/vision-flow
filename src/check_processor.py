@@ -54,6 +54,8 @@ class CheckProcessorService(BaseMongoService):
         
         self.logger.info(f"Processing REPORT task {task_id} for document {document_id}")
         
+        # update task status
+        self.update_task_status(task_id, "IN_PROGRESS", {"message": "Processing PDF"})
         try:
             # Get file document
             file_doc = self.get_file_document(document_id)

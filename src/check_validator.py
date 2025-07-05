@@ -48,6 +48,9 @@ class CheckValidator(BaseMongoService):
         document_id = task["documentId"]
         
         self.logger.info(f"Processing task {task_id} for document {document_id}")
+
+        # update task status
+        self.update_task_status(task_id, "IN_PROGRESS", {"message": "Validating PDF"})
         
         try:
             # Get file document

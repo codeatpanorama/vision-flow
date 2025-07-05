@@ -115,8 +115,8 @@ class CheckProcessor:
         for i in range(0, len(images), 2):
             if i + 1 < len(images):
                 # testing logic for a single image
-                if i > 3:
-                    break
+                # if i > 3:
+                #     break
                 # Analyze both images to determine which is front/back
                 first_image = images[i]
                 second_image = images[i + 1]

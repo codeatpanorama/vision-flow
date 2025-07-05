@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# Explicitly set platform for AMD64
+FROM --platform=linux/amd64 python:3.11-slim
 
 # Set working directory
 WORKDIR /app
@@ -6,6 +7,8 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     poppler-utils \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -17,8 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY src/ ./src/
 
-# Create necessary directories
-RUN mkdir -p logs repository/processed_checks data
+# Create necessary directories with proper permissions
+RUN mkdir -p logs repository/processed_checks data && \
+    chmod 777 logs repository repository/processed_checks data
 
 # Set environment variables
 ENV PYTHONPATH=/app
@@ -27,4 +31,7 @@ ENV PYTHONUNBUFFERED=1
 # Create a non-root user
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
-USER appuser 
+USER appuser
+
+# Ensure volume mount points have correct permissions
+VOLUME ["/app/repository", "/app/logs", "/app/data"] 

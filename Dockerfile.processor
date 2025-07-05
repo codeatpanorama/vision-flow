@@ -1,5 +1,5 @@
 # Use the base image
-FROM vision-flow-base:latest
+FROM madhavpandey33/vision-flow-base:07-04-25_amd 
 
 # Run the check processor
 CMD ["python", "src/check_processor.py"] 
